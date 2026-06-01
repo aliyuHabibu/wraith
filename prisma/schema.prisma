@@ -78,6 +78,10 @@ model HostFnLog {
   @@index([contractId, functionName])
   @@index([ledger])
   @@index([txHash])
+
+  @@schema("wraith")
+}
+
 // ─── NFT Transfers ────────────────────────────────────────────────────────────
 model NftTransfer {
   id             Int      @id @default(autoincrement())
