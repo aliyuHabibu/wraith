@@ -12,6 +12,8 @@ import {
   pruneOldTransfers,
 } from "./db";
 import { emitTransfer } from "./events";
+import { parseHostFnEvent, upsertHostFnLogs, type HostFnRecord } from "./indexer/host-fn-log";
+import { pollParallel } from "./indexer/parallel";
 import { isNftTransferEvent, parseNftEvents, fetchNftMetadata } from "./ingester/nft";
 import { createSourceSwitcherWithConfig } from "./indexer/sources";
 
@@ -68,6 +70,10 @@ export function resolveSacContractIds(): string[] {
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
+const POLL_INTERVAL_MS  = parseInt(process.env.POLL_INTERVAL_MS    ?? "6000",  10);
+const BATCH_SIZE        = parseInt(process.env.EVENTS_BATCH_SIZE   ?? "10000", 10);
+const INGEST_WORKERS    = parseInt(process.env.INGEST_WORKERS      ?? "1",     10);
+const SAC_CONTRACT_IDS  = resolveSacContractIds();
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS ?? "6000", 10);
 const BATCH_SIZE = parseInt(process.env.EVENTS_BATCH_SIZE ?? "10000", 10);
 const SAC_CONTRACT_IDS = resolveSacContractIds();
@@ -129,6 +135,10 @@ async function pollOnce(
     return highestLedger;
   }
 
+  // Parse token transfer events
+  const records = parseEvents(events);
+
+  // Persist token transfers
   // Split events by type: NFT (4 topics) vs fungible (3 topics)
   const fungibleEvents = events.filter((e) => !isNftTransferEvent(e));
   const nftRawEvents   = events.filter((e) => isNftTransferEvent(e));
@@ -150,6 +160,14 @@ async function pollOnce(
     records.forEach(emitTransfer);
   }
 
+  // Log every event as a raw host-fn invocation for downstream consumers (#84)
+  const hostFnRecords = events
+    .map(raw => { try { return parseHostFnEvent(raw); } catch { return null; } })
+    .filter((r): r is HostFnRecord => r !== null);
+  if (hostFnRecords.length > 0) {
+    await upsertHostFnLogs(hostFnRecords).catch(err =>
+      console.error("[indexer] host-fn log error:", err),
+    );
   // ── NFT path ─────────────────────────────────────────────────────────────────
   const nftParsed   = parseNftEvents(nftRawEvents);
   const nftRecords  = nftParsed.map((p) => p.record);
@@ -234,7 +252,20 @@ export async function startIndexer(): Promise<void> {
         continue;
       }
 
-      currentLedger = await pollOnce(currentLedger, target);
+      if (INGEST_WORKERS > 1 && SAC_CONTRACT_IDS.length > 1) {
+        // Parallel path: shard contracts across N workers for higher throughput (#83)
+        const { totalInserted, highestLedger } = await pollParallel(
+          SAC_CONTRACT_IDS,
+          currentLedger,
+          target,
+          BATCH_SIZE,
+          INGEST_WORKERS,
+        );
+        totalIndexed += totalInserted;
+        currentLedger = highestLedger;
+      } else {
+        currentLedger = await pollOnce(currentLedger, target);
+      }
 
       // Periodic data retention cleanup
       pollCycleCount++;
