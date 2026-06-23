@@ -13,42 +13,47 @@ import supertest from "supertest";
 import { createApp } from "../api";
 import { signPayload, matchesFilter } from "../workers/webhooks";
 import type { TransferEvent } from "../events";
+import { prisma } from "../db";
 
 // ─── Mock DB + dependencies ───────────────────────────────────────────────────
-jest.mock("../db", () => ({
-  prisma: {
-    webhookSubscription: {
-      create:   jest.fn(),
-      findMany: jest.fn().mockResolvedValue([]),
-      findUnique: jest.fn(),
-      delete:   jest.fn(),
+vi.mock("../db", async (importOriginal) => {
+  const mod = await importOriginal();
+  return {
+    ...mod,
+    prisma: {
+      webhookSubscription: {
+        create:   vi.fn(),
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn(),
+        delete:   vi.fn(),
+      },
+      webhookDelivery: {
+        findMany: vi.fn().mockResolvedValue([]),
+        count:    vi.fn().mockResolvedValue(0),
+      },
+      $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+      $queryRaw: vi.fn().mockResolvedValue([{ "?column?": 1 }]),
+      tokenTransfer: {
+        count:    vi.fn().mockResolvedValue(0),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      indexerState: { findUnique: vi.fn().mockResolvedValue(null) },
     },
-    webhookDelivery: {
-      findMany: jest.fn().mockResolvedValue([]),
-      count:    jest.fn().mockResolvedValue(0),
-    },
-    $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
-    $queryRaw: jest.fn().mockResolvedValue([{ "?column?": 1 }]),
-    tokenTransfer: {
-      count:    jest.fn().mockResolvedValue(0),
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    indexerState: { findUnique: jest.fn().mockResolvedValue(null) },
-  },
-  getLastIndexedLedger: jest.fn().mockResolvedValue(1000),
-  queryTransfers:    jest.fn().mockResolvedValue({ total: 0, transfers: [] }),
-  queryAllTransfers: jest.fn().mockResolvedValue({ total: 0, transfers: [] }),
-  queryByTxHash:     jest.fn().mockResolvedValue([]),
-  querySummary:      jest.fn().mockResolvedValue([]),
+    getLastIndexedLedger: vi.fn().mockResolvedValue(1000),
+    queryTransfers:    vi.fn().mockResolvedValue({ total: 0, transfers: [] }),
+    queryAllTransfers: vi.fn().mockResolvedValue({ total: 0, transfers: [] }),
+    queryByTxHash:     vi.fn().mockResolvedValue([]),
+    querySummary:      vi.fn().mockResolvedValue([]),
+  };
+});
+
+vi.mock("../rpc", () => ({
+  getLatestLedger:      vi.fn().mockResolvedValue(1002),
+  validateNetworkConfig: vi.fn(),
 }));
 
-jest.mock("../rpc", () => ({
-  getLatestLedger:      jest.fn().mockResolvedValue(1002),
-  validateNetworkConfig: jest.fn(),
-}));
-
-jest.mock("../indexer", () => ({
-  getIndexerStats: jest.fn().mockReturnValue({
+vi.mock("../indexer", () => ({
+  getIndexerStats: vi.fn().mockReturnValue({
     startedAt: "2024-01-01T00:00:00Z",
     uptimeSeconds: 0,
     totalIndexed: 0,
@@ -56,12 +61,10 @@ jest.mock("../indexer", () => ({
 }));
 
 // Prevent the webhook worker from starting during API tests
-jest.mock("../workers/webhooks", () => ({
-  ...jest.requireActual("../workers/webhooks"),
-  startWebhookWorker: jest.fn(),
-}));
-
-const { prisma } = require("../db");
+vi.mock("../workers/webhooks", async (importOriginal) => {
+  const mod = await importOriginal();
+  return { ...mod, startWebhookWorker: vi.fn() };
+});
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const makeTransfer = (overrides: Partial<TransferEvent> = {}): TransferEvent => ({
@@ -148,7 +151,7 @@ describe("matchesFilter", () => {
 describe("POST /webhooks", () => {
   const app = createApp();
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   it("creates a subscription and returns 201", async () => {
     prisma.webhookSubscription.create.mockResolvedValueOnce({

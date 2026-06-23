@@ -1,13 +1,13 @@
-jest.mock("../rpc", () => ({
-  getLatestLedger: jest.fn(),
-  fetchEventsSafe: jest.fn(),
+vi.mock("../rpc", () => ({
+  getLatestLedger: vi.fn(),
+  fetchEventsSafe: vi.fn(),
 }));
 
 import { createSourceSwitcherWithConfig } from "../indexer/sources";
 import { getLatestLedger, fetchEventsSafe } from "../rpc";
 
-const mockGetLatestLedger = getLatestLedger as jest.MockedFunction<typeof getLatestLedger>;
-const mockFetchEventsSafe = fetchEventsSafe as jest.MockedFunction<typeof fetchEventsSafe>;
+const mockGetLatestLedger = vi.mocked(getLatestLedger);
+const mockFetchEventsSafe = vi.mocked(fetchEventsSafe);
 
 describe("Indexer source switcher", () => {
   beforeEach(() => {
@@ -18,7 +18,7 @@ describe("Indexer source switcher", () => {
   it("falls back to Horizon when RPC is unhealthy", async () => {
     mockGetLatestLedger.mockRejectedValue(new Error("rpc down"));
 
-    const fetchImpl = jest.fn()
+    const fetchImpl = vi.fn()
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ _embedded: { records: [{ sequence: 123 }] } }),

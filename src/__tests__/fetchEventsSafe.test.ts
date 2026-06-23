@@ -27,7 +27,7 @@ function networkError(): Error {
 // Convenience: build a mock fetchFn from a sequence of responses
 function mockFetch(...calls: Array<() => Promise<any>>) {
   let i = 0
-  return jest.fn(async () => {
+  return vi.fn(async () => {
     const fn = calls[i++]
     if (!fn) throw new Error('mockFetch: unexpected extra call')
     return fn()
@@ -86,7 +86,7 @@ describe('fetchEventsSafe — bisection algorithm', () => {
 
   it('returns empty without infinite loop when the entire range fails with XDR errors', async () => {
     // 100–101: full → XDR, then both single ledgers also XDR → both skipped
-    const fetch = jest.fn().mockRejectedValue(xdrError())
+    const fetch = vi.fn().mockRejectedValue(xdrError())
 
     const result = await fetchEventsSafe(100, 101, [], 10_000, fetch as any)
 
@@ -110,7 +110,7 @@ describe('fetchEventsSafe — bisection algorithm', () => {
   })
 
   it('forwards contractIds to every fetchFn call', async () => {
-    const fetch = jest.fn().mockResolvedValue({ events: [], latestLedger: 100 })
+    const fetch = vi.fn().mockResolvedValue({ events: [], latestLedger: 100 })
     const contracts = ['CABC123', 'CDEF456']
 
     await fetchEventsSafe(100, 100, contracts, 5_000, fetch as any)

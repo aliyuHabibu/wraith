@@ -7,29 +7,30 @@
 
 import { createApp } from "../api";
 import supertest from "supertest";
+import { getAccountSummary } from "../db";
 
-// ── Mock DB module ────────────────────────────────────────────────────────────
-jest.mock("../db", () => ({
-  ...jest.requireActual("../db"),
-  getAccountSummary: jest.fn(),
-  queryTransfers: jest.fn().mockResolvedValue({ total: 0, transfers: [] }),
-  queryAllTransfers: jest.fn().mockResolvedValue({ total: 0, transfers: [] }),
-  queryByTxHash: jest.fn().mockResolvedValue([]),
-  querySummary: jest.fn().mockResolvedValue([]),
-  getLastIndexedLedger: jest.fn().mockResolvedValue(1000),
-  prisma: { $queryRaw: jest.fn().mockResolvedValue([{ "?column?": 1 }]) },
+vi.mock("../db", async (importOriginal) => {
+  const mod = await importOriginal();
+  return {
+    ...mod,
+    getAccountSummary: vi.fn(),
+    queryTransfers: vi.fn().mockResolvedValue({ total: 0, transfers: [] }),
+    queryAllTransfers: vi.fn().mockResolvedValue({ total: 0, transfers: [] }),
+    queryByTxHash: vi.fn().mockResolvedValue([]),
+    querySummary: vi.fn().mockResolvedValue([]),
+    getLastIndexedLedger: vi.fn().mockResolvedValue(1000),
+    prisma: { $queryRaw: vi.fn().mockResolvedValue([{ "?column?": 1 }]) },
+  };
+});
+
+vi.mock("../rpc", () => ({
+  getLatestLedger: vi.fn().mockResolvedValue(1002),
+  validateNetworkConfig: vi.fn(),
 }));
 
-jest.mock("../rpc", () => ({
-  getLatestLedger: jest.fn().mockResolvedValue(1002),
-  validateNetworkConfig: jest.fn(),
+vi.mock("../indexer", () => ({
+  getIndexerStats: vi.fn().mockReturnValue({ startedAt: "2024-01-01T00:00:00Z", uptimeSeconds: 0, totalIndexed: 0 }),
 }));
-
-jest.mock("../indexer", () => ({
-  getIndexerStats: jest.fn().mockReturnValue({ startedAt: "2024-01-01T00:00:00Z", uptimeSeconds: 0, totalIndexed: 0 }),
-}));
-
-const { getAccountSummary } = require("../db");
 
 const ALICE = "GDWCO35QUYQLGO6P7OLW4BZWNMMGGUWNPLRVPLCBVG7YNVDZKUDIW4KN";
 const CONTRACT = "CBC42KFZO33TYVFDOUXFRWXYYXHFGH7W5GM4IJQSXKGFINKL2XPP4XTE";

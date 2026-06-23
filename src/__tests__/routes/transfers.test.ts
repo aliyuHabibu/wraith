@@ -2,21 +2,21 @@ import request from "supertest";
 import { createApp } from "../../api";
 
 // ── Module mocks must be declared before any imports that use them ──────────
-jest.mock("../../db", () => ({
-  queryTransfers: jest.fn(),
-  queryAllTransfers: jest.fn(),
-  queryByTxHash: jest.fn(),
-  querySummary: jest.fn(),
-  getLastIndexedLedger: jest.fn(),
-  prisma: { $queryRaw: jest.fn() },
+vi.mock("../../db", () => ({
+  queryTransfers: vi.fn(),
+  queryAllTransfers: vi.fn(),
+  queryByTxHash: vi.fn(),
+  querySummary: vi.fn(),
+  getLastIndexedLedger: vi.fn(),
+  prisma: { $queryRaw: vi.fn() },
 }));
 
-jest.mock("../../rpc", () => ({
-  getLatestLedger: jest.fn(),
+vi.mock("../../rpc", () => ({
+  getLatestLedger: vi.fn(),
 }));
 
-jest.mock("../../indexer", () => ({
-  getIndexerStats: jest
+vi.mock("../../indexer", () => ({
+  getIndexerStats: vi
     .fn()
     .mockReturnValue({ startedAt: "2024-01-01T00:00:00.000Z", uptimeSeconds: 0, totalIndexed: 0 }),
 }));
@@ -25,12 +25,12 @@ import { queryTransfers, queryAllTransfers, queryByTxHash, querySummary, getLast
 import { getLatestLedger } from "../../rpc";
 
 // ── Typed mock helpers ────────────────────────────────────────────────────────
-const mockQueryTransfers = queryTransfers as jest.MockedFunction<typeof queryTransfers>;
-const mockQueryAllTransfers = queryAllTransfers as jest.MockedFunction<typeof queryAllTransfers>;
-const mockQueryByTxHash = queryByTxHash as jest.MockedFunction<typeof queryByTxHash>;
-const mockQuerySummary = querySummary as jest.MockedFunction<typeof querySummary>;
-const mockGetLastIndexedLedger = getLastIndexedLedger as jest.MockedFunction<typeof getLastIndexedLedger>;
-const mockGetLatestLedger = getLatestLedger as jest.MockedFunction<typeof getLatestLedger>;
+const mockQueryTransfers = vi.mocked(queryTransfers);
+const mockQueryAllTransfers = vi.mocked(queryAllTransfers);
+const mockQueryByTxHash = vi.mocked(queryByTxHash);
+const mockQuerySummary = vi.mocked(querySummary);
+const mockGetLastIndexedLedger = vi.mocked(getLastIndexedLedger);
+const mockGetLatestLedger = vi.mocked(getLatestLedger);
 
 // ── Seed data factory ─────────────────────────────────────────────────────────
 const CONTRACT_A = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM";

@@ -15,35 +15,30 @@ import { createOpaMiddleware } from "../middleware/opa";
 
 type MockOpaResult = { allow: boolean; deny_reason?: string; deny_rule?: string };
 
-let mockOpaResult: MockOpaResult = { allow: true };
-let opaRequestSpy: jest.Mock;
-
-jest.mock("http", () => {
-  const actual = jest.requireActual<typeof http>("http");
-
-  opaRequestSpy = jest.fn((_opts, callback) => {
-    // Build a fake IncomingMessage
+const { opaRequestSpy, setMockOpaResult } = vi.hoisted(() => {
+  let current: MockOpaResult = { allow: true };
+  const opaRequestSpy = vi.fn((_opts: any, callback: any) => {
     const fakeRes = new EventEmitter() as NodeJS.ReadableStream & { statusCode: number };
     (fakeRes as { statusCode: number }).statusCode = 200;
-
-    // Simulate async response delivery
     setImmediate(() => {
-      const body = JSON.stringify({ result: mockOpaResult });
+      const body = JSON.stringify({ result: current });
       (fakeRes as EventEmitter).emit("data", body);
       (fakeRes as EventEmitter).emit("end");
     });
-
     if (typeof callback === "function") callback(fakeRes);
-
     return {
-      on:    jest.fn(),
-      write: jest.fn(),
-      end:   jest.fn(),
+      on:    vi.fn(),
+      write: vi.fn(),
+      end:   vi.fn(),
     };
   });
-
-  return { ...actual, request: opaRequestSpy };
+  return { opaRequestSpy, setMockOpaResult: (v: MockOpaResult) => { current = v; } };
 });
+
+vi.mock("http", () => ({
+  default: { request: opaRequestSpy },
+  request: opaRequestSpy,
+}));
 
 // ── Test app factory ──────────────────────────────────────────────────────────
 
@@ -59,12 +54,12 @@ function makeApp(overrides = {}) {
 
 describe("createOpaMiddleware", () => {
   beforeEach(() => {
-    mockOpaResult = { allow: true };
-    jest.clearAllMocks();
+    setMockOpaResult({ allow: true });
+    vi.clearAllMocks();
   });
 
   it("allows the request when OPA returns allow=true", async () => {
-    mockOpaResult = { allow: true };
+    setMockOpaResult({ allow: true });
     const res = await supertest(makeApp())
       .get("/protected")
       .set("Authorization", "Bearer valid-token");
@@ -74,11 +69,11 @@ describe("createOpaMiddleware", () => {
   });
 
   it("returns 403 when OPA returns allow=false", async () => {
-    mockOpaResult = {
+    setMockOpaResult({
       allow:        false,
       deny_reason:  "missing or empty bearer token",
       deny_rule:    "require_bearer_token",
-    };
+    });
 
     const res = await supertest(makeApp()).get("/protected");
 
@@ -89,11 +84,11 @@ describe("createOpaMiddleware", () => {
   });
 
   it("includes rule and reason in the 403 body", async () => {
-    mockOpaResult = {
+    setMockOpaResult({
       allow:       false,
       deny_reason: "admin role required",
       deny_rule:   "require_admin_role",
-    };
+    });
 
     const res = await supertest(makeApp())
       .get("/protected")
@@ -104,7 +99,7 @@ describe("createOpaMiddleware", () => {
   });
 
   it("forwards the request to the route handler when allowed", async () => {
-    mockOpaResult = { allow: true };
+    setMockOpaResult({ allow: true });
 
     const res = await supertest(makeApp())
       .get("/healthz")
@@ -114,7 +109,7 @@ describe("createOpaMiddleware", () => {
   });
 
   it("extracts bearer token from Authorization header", async () => {
-    mockOpaResult = { allow: true };
+    setMockOpaResult({ allow: true });
     await supertest(makeApp())
       .get("/protected")
       .set("Authorization", "Bearer my-token-123");
@@ -124,7 +119,7 @@ describe("createOpaMiddleware", () => {
   });
 
   it("returns 503 when OPA is unreachable", async () => {
-    (opaRequestSpy as jest.Mock).mockImplementationOnce((_opts: unknown, _callback: unknown) => {
+    opaRequestSpy.mockImplementationOnce((_opts: unknown, _callback: unknown) => {
       const fakeReq = {
         on: (event: string, handler: (err: Error) => void) => {
           if (event === "error") setImmediate(() => handler(new Error("ECONNREFUSED")));
@@ -141,7 +136,7 @@ describe("createOpaMiddleware", () => {
   });
 
   it("uses x-user-role header to populate role in OPA input", async () => {
-    mockOpaResult = { allow: true };
+    setMockOpaResult({ allow: true });
     await supertest(makeApp())
       .get("/protected")
       .set("Authorization", "Bearer tok")
@@ -151,7 +146,7 @@ describe("createOpaMiddleware", () => {
   });
 
   it("uses custom getRole extractor when provided", async () => {
-    mockOpaResult = { allow: true };
+    setMockOpaResult({ allow: true });
     const app = makeApp({ getRole: () => "superuser" });
     const res = await supertest(app).get("/protected").set("Authorization", "Bearer tok");
     expect(res.status).toBe(200);

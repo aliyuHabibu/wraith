@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "test": "jest --runInBand",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:coverage": "vitest run --config vitest.config.ts --reporter verbose",
     "test:watch": "jest --watch",
     "test:chaos": "jest --runInBand --testPathPatterns=tests/chaos --testTimeout=300000 --config=jest.chaos.config.js",
     "db:generate": "prisma generate",
@@ -66,6 +67,8 @@
     "ts-node-dev": "^2.0.0",
     "fast-check": "^3.22.0",
     "typedoc": "^0.28.19",
-    "typescript": "^5.4.2"
+    "typescript": "^5.4.2",
+    "vitest": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.9"
   }
 }

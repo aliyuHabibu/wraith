@@ -22,6 +22,19 @@ jobs:
       - run: npm run build
       - run: npm test --if-present
 
+  coverage:
+    name: Vitest coverage (75% threshold)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci || npm install
+      - run: npx prisma generate
+      - run: npm run test:coverage
+
   integration:
     name: Integration tests
     runs-on: ubuntu-latest
